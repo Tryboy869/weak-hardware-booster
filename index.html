@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weak Hardware Booster | Interactive Tech Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #02040a;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            margin: 0;
+        }
+        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+        
+        #video-engine {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 100px rgba(0, 128, 255, 0.15);
+            background: #000;
+            max-width: 95vw;
+            max-height: 95vh;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+        }
+
+        .overlay-ui {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .btn-action {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 24px;
+            border-radius: 50px;
+            color: #fff;
+            font-weight: 600;
+            transition: all 0.3s;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.8rem;
+        }
+
+        .btn-action:hover {
+            background: #3b82f6;
+            border-color: #60a5fa;
+            transform: translateY(-2px);
+        }
+
+        .now-playing {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            pointer-events: none;
+        }
+
+        .scanline {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.1) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            opacity: 0.2;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanline"></div>
+
+    <div class="now-playing">
+        <div class="flex items-center gap-3">
+            <div class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
+            <span class="text-xs font-orbitron tracking-widest text-gray-400">DEMO ENGINE v2.5 // LIVE FEED</span>
+        </div>
+        <h1 id="scene-label" class="text-xl font-orbitron mt-2 text-blue-400">INITIALIZING...</h1>
+    </div>
+
+    <!-- The Engine -->
+    <canvas id="video-engine" width="1920" height="1080"></canvas>
+
+    <!-- UI -->
+    <div class="overlay-ui">
+        <button id="playBtn" onclick="toggleDemo()" class="btn-action font-orbitron">
+            <i class="fas fa-play mr-2"></i> Play Demo
+        </button>
+        <button onclick="resetDemo()" class="btn-action font-orbitron">
+            <i class="fas fa-redo"></i>
+        </button>
+        <div class="w-64 h-1 bg-gray-800 rounded-full overflow-hidden">
+            <div id="progress-bar" class="h-full bg-blue-500 w-0 transition-all duration-100"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('video-engine');
+        const ctx = canvas.getContext('2d');
+        const label = document.getElementById('scene-label');
+        const progress = document.getElementById('progress-bar');
+        const playBtn = document.getElementById('playBtn');
+
+        let isPlaying = false;
+        let startTime = null;
+        let animationId = null;
+
+        const SCENES = {
+            INTRO: { start: 0, end: 4, name: "SYSTEM STARTUP" },
+            PROBLEM: { start: 4, end: 12, name: "HARDWARE LIMITATION ANALYSIS" },
+            SOLUTION: { start: 12, end: 18, name: "BOOSTER ACTIVATION" },
+            RESULTS: { start: 18, end: 28, name: "PERFORMANCE VALIDATION" },
+            BENCHMARKS: { start: 28, end: 38, name: "TECHNICAL DATA SHEET" },
+            CTA: { start: 38, end: 45, name: "PARTNERSHIP INQUIRY" }
+        };
+
+        const TOTAL_TIME = 45;
+
+        function drawBackground() {
+            ctx.fillStyle = '#02040a';
+            ctx.fillRect(0, 0, 1920, 1080);
+            
+            // Grid
+            ctx.strokeStyle = 'rgba(0, 128, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<1920; i+=80) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,1080); ctx.stroke(); }
+            for(let i=0; i<1080; i+=80) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(1920,i); ctx.stroke(); }
+        }
+
+        function drawText(text, x, y, size, color, font = "Orbitron", align = "center", weight = "700") {
+            ctx.fillStyle = color;
+            ctx.textAlign = align;
+            ctx.font = `${weight} ${size}px ${font}`;
+            ctx.fillText(text, x, y);
+        }
+
+        function drawRoundedRect(x, y, w, h, r, color, border = null) {
+            ctx.beginPath();
+            ctx.roundRect(x, y, w, h, r);
+            ctx.fillStyle = color;
+            ctx.fill();
+            if(border) {
+                ctx.strokeStyle = border;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        function renderFrame(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const elapsed = (timestamp - startTime) / 1000;
+            const progressPercent = (elapsed / TOTAL_TIME) * 100;
+            progress.style.width = `${progressPercent}%`;
+
+            drawBackground();
+
+            if (elapsed < SCENES.INTRO.end) {
+                label.innerText = SCENES.INTRO.name;
+                const alpha = Math.min(elapsed, 1);
+                ctx.globalAlpha = alpha;
+                drawText("NEXUS STUDIO", 960, 500, 40, "#3b82f6", "Orbitron", "center", "400");
+                drawText("WEAK HARDWARE BOOSTER", 960, 600, 100, "#fff", "Orbitron", "center", "900");
+                ctx.globalAlpha = 1;
+            } 
+            else if (elapsed < SCENES.PROBLEM.end) {
+                label.innerText = SCENES.PROBLEM.name;
+                const t = elapsed - SCENES.INTRO.end;
+                
+                drawText("THE GAMING DILEMMA", 960, 150, 60, "#fff");
+                
+                // Budget Side
+                drawRoundedRect(150, 250, 750, 600, 20, "rgba(239, 68, 68, 0.05)", "#ef4444");
+                drawText("BUDGET SETUP ($800)", 525, 320, 30, "#ef4444");
+                drawText("28 FPS", 525, 550, 120, "#ef4444");
+                drawText("i5-12450H | RTX 3050", 525, 650, 25, "#94a3b8", "Inter", "center", "400");
+                
+                // Flagship Side
+                drawRoundedRect(1020, 250, 750, 600, 20, "rgba(255, 255, 255, 0.02)", "#334155");
+                drawText("FLAGSHIP SETUP ($2,800+)", 1395, 320, 30, "#94a3b8");
+                drawText("85 FPS", 1395, 550, 120, "#334155");
+
+                if (t > 4) {
+                    drawText("Price = Performance? Not anymore.", 960, 950, 40, "#ef4444");
+                }
+            }
+            else if (elapsed < SCENES.SOLUTION.end) {
+                label.innerText = SCENES.SOLUTION.name;
+                const t = elapsed - SCENES.PROBLEM.end;
+                
+                const pulse = Math.sin(t * 10) * 10;
+                ctx.shadowBlur = 40 + pulse;
+                ctx.shadowColor = "#3b82f6";
+                drawRoundedRect(760, 340, 400, 400, 200, "#1e3a8a", "#60a5fa");
+                ctx.shadowBlur = 0;
+                
+                drawText("BOOST", 960, 520, 40, "#fff");
+                drawText("ACTIVE", 960, 580, 40, "#60a5fa");
+
+                drawText("6-10x COMPUTATIONAL ACCELERATION", 960, 200, 50, "#fff");
+                drawText("Distributed Parallel Processing Engine", 960, 850, 30, "#94a3b8", "Inter", "center", "400");
+            }
+            else if (elapsed < SCENES.RESULTS.end) {
+                label.innerText = SCENES.RESULTS.name;
+                const t = Math.min((elapsed - SCENES.SOLUTION.end) / 2, 1);
+
+                drawText("MEASURED IMPACT ON ENTRY-LEVEL HARDWARE", 960, 120, 50, "#fff");
+
+                // FPS Bar
+                const fpsW = 400 + (1000 * t);
+                drawText("FRAME RATE (FPS)", 260, 300, 25, "#94a3b8", "Orbitron", "left");
+                drawRoundedRect(260, 330, 1400, 60, 10, "#111827");
+                drawRoundedRect(260, 330, fpsW, 60, 10, "#22c55e");
+                drawText(`${Math.floor(28 + (44 * t))} FPS`, 260 + fpsW + 30, 375, 45, "#22c55e", "Orbitron", "left");
+
+                // Temp Bar
+                const tempW = 1200 - (400 * t);
+                drawText("THERMAL MANAGEMENT", 260, 500, 25, "#94a3b8", "Orbitron", "left");
+                drawRoundedRect(260, 530, 1400, 60, 10, "#111827");
+                drawRoundedRect(260, 530, tempW, 60, 10, "#3b82f6");
+                drawText(`${Math.floor(92 - (18 * t))}°C`, 260 + tempW + 30, 575, 45, "#3b82f6", "Orbitron", "left");
+
+                // Battery Bar
+                const batW = 500 + (600 * t);
+                drawText("BATTERY LIFE", 260, 700, 25, "#94a3b8", "Orbitron", "left");
+                drawRoundedRect(260, 730, 1400, 60, 10, "#111827");
+                drawRoundedRect(260, 730, batW, 60, 10, "#eab308");
+                drawText(`${Math.floor(75 + (50 * t))} MIN`, 260 + batW + 30, 775, 45, "#eab308", "Orbitron", "left");
+            }
+            else if (elapsed < SCENES.BENCHMARKS.end) {
+                label.innerText = SCENES.BENCHMARKS.name;
+                drawText("CROSS-PLATFORM BENCHMARKS", 960, 150, 60, "#fff");
+                
+                const tableY = 300;
+                drawRoundedRect(360, tableY, 1200, 500, 20, "rgba(255,255,255,0.02)", "#1e293b");
+                
+                const rows = [
+                    ["WORKLOAD", "STANDARD", "BOOSTED", "GAIN"],
+                    ["Physics (Matrix Ops)", "890ms", "145ms", "6.1x"],
+                    ["Texture Streaming", "2,300ms", "340ms", "6.8x"],
+                    ["AI Pathfinding", "147ms", "19ms", "7.7x"]
+                ];
+
+                rows.forEach((row, i) => {
+                    const y = tableY + 80 + (i * 100);
+                    const color = i === 0 ? "#3b82f6" : "white";
+                    drawText(row[0], 420, y, 30, color, "Inter", "left", i === 0 ? "900" : "400");
+                    drawText(row[1], 800, y, 30, "#94a3b8", "Inter", "center");
+                    drawText(row[2], 1100, y, 30, "#fff", "Inter", "center");
+                    drawText(row[3], 1450, y, 35, i === 0 ? "#3b82f6" : "#22c55e", "Orbitron", "right");
+                    if(i < rows.length - 1) {
+                        ctx.strokeStyle = "#1e293b";
+                        ctx.beginPath(); ctx.moveTo(400, y + 40); ctx.lineTo(1520, y + 40); ctx.stroke();
+                    }
+                });
+            }
+            else if (elapsed < SCENES.CTA.end) {
+                label.innerText = SCENES.CTA.name;
+                drawText("NEXT-GEN PERFORMANCE STARTS HERE", 960, 300, 60, "#fff");
+                drawText("nexusstudio100@gmail.com", 960, 450, 80, "#3b82f6");
+                
+                drawText("Daouda Abdoul Anzize", 960, 600, 40, "#fff");
+                drawText("Founder, Nexus Studio", 960, 660, 30, "#94a3b8", "Inter", "center", "400");
+
+                drawRoundedRect(710, 750, 500, 100, 50, "white");
+                drawText("REQUEST TECHNICAL DEMO", 960, 815, 30, "#000");
+            } else {
+                resetDemo();
+                return;
+            }
+
+            if(isPlaying) animationId = requestAnimationFrame(renderFrame);
+        }
+
+        function toggleDemo() {
+            if (isPlaying) {
+                isPlaying = false;
+                cancelAnimationFrame(animationId);
+                playBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Resume Demo';
+            } else {
+                isPlaying = true;
+                playBtn.innerHTML = '<i class="fas fa-pause mr-2"></i> Pause Demo';
+                animationId = requestAnimationFrame(renderFrame);
+            }
+        }
+
+        function resetDemo() {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            startTime = null;
+            progress.style.width = '0%';
+            playBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Start Demo';
+            drawBackground();
+            drawText("WEAK HARDWARE BOOSTER", 960, 540, 80, "rgba(255,255,255,0.1)");
+            label.innerText = "READY TO START";
+        }
+
+        // Initial Draw
+        window.onload = resetDemo;
+    </script>
+</body>
+</html>
